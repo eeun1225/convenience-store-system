@@ -7,8 +7,7 @@ import store.domain.user.User
 import store.domain.user.UserMode
 import store.service.PaymentService
 import store.service.StoreService
-import store.view.InputView
-import store.view.OutputView
+import store.view.*
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
@@ -18,6 +17,8 @@ class StoreController(
     private val paymentService: PaymentService,
     private val inputView: InputView,
     private val outputView: OutputView,
+    private val customerOutput: CustomerOutput,
+    private val adminOutput: AdminOutput,
     private val historyRepository: PurchaseHistoryRepository = PurchaseHistoryRepository()
 ) {
     private val carts = mutableMapOf<String, Cart>()
@@ -92,14 +93,15 @@ class StoreController(
 
         outputView.printCart(cart)
 
-        if (inputView.askModifyCart()) {
+        customerOutput.askModifyCart()
+        if (inputView.readYesOrNo()) {
             modifyCart(cart)
         }
     }
 
     private fun modifyCart(cart: Cart) {
         outputView.printCart(cart)
-        val action = inputView.readCartModifyAction()
+        val action = inputView.readSelection()
 
         when (action) {
             "1" -> {
@@ -125,11 +127,8 @@ class StoreController(
             return
         }
 
-        outputView.printCart(cart)
-
-        if (!inputView.askConfirmCheckout()) {
-            return
-        }
+        customerOutput.askConfirmCheckout()
+        if (!inputView.readYesOrNo()) return
 
         val currentDate = LocalDate.now().toString()
         val cartItems = cart.getAllItems().map { it.product.name to it.quantity }
@@ -137,10 +136,9 @@ class StoreController(
         val purchaseItems = storeService.processPurchase(cartItems, currentDate)
 
         val applyMembership = if (customer.isMember) {
-            inputView.askMembershipDiscount()
-        } else {
-            false
-        }
+            customerOutput.askMembershipDiscount()
+            inputView.readYesOrNo()
+        } else false
 
         val receipt = paymentService.createReceipt(purchaseItems, applyMembership)
         storeService.updateInventory(purchaseItems)
@@ -169,16 +167,15 @@ class StoreController(
 
         outputView.printPurchaseHistories(histories)
 
-        if (inputView.askViewDetailHistory()) {
-            val historyId = inputView.readHistoryId()
-            val history = historyRepository.findById(historyId)
+        customerOutput.askViewDetailHistory()
+        if (!inputView.readYesOrNo()) return
 
-            if (history != null) {
-                outputView.printDetailHistory(history)
-            } else {
-                outputView.printError("[ERROR] 구매 이력을 찾을 수 없습니다.")
-            }
-        }
+        customerOutput.askHistoryId()
+        val id = inputView.readHistoryId()
+        val history = historyRepository.findById(id)
+
+        if (history != null) outputView.printDetailHistory(history)
+        else outputView.printError("[ERROR] 구매 이력이 존재하지 않습니다.")
     }
 
     private fun runAdminMode() {
@@ -191,10 +188,10 @@ class StoreController(
                 outputView.printError(e.message ?: "[ERROR] 잘못된 입력입니다.")
                 continue
             }
-        } while (askContinueOwnerMode())
+        } while (askContinueAdminMode())
     }
 
-    private fun processAdminAction(owner: User.Admin) {
+    private fun processAdminAction(admin: User.Admin) {
         val action = selectOwnerAction()
 
         when (action) {
@@ -208,10 +205,11 @@ class StoreController(
     }
 
     private fun viewInventory() {
-        outputView.printOwnerInventory(storeService.getAllProducts())
+        adminOutput.printAdminInventory(storeService.getAllProducts())
 
-        if (inputView.askViewStatistics()) {
-            outputView.printCategoryStatistics(storeService.getAllProducts())
+        adminOutput.askViewStatistics()
+        if (inputView.readYesOrNo()) {
+            adminOutput.printCategoryStatistics(storeService.getAllProducts())
         }
     }
 
@@ -243,7 +241,7 @@ class StoreController(
     }
 
     private fun createOrLoginCustomer(): User.Customer {
-        val loginType = inputView.askLoginOrGuest()
+        val loginType = inputView.readSelection()
 
         return if (loginType == "1") {
             val phoneNumber = inputView.readPhoneNumber()
@@ -301,21 +299,14 @@ class StoreController(
         outputView.printProducts(storeService.getAllProducts())
     }
 
-    private fun askContinueShopping(): Boolean {
-        return try {
-            inputView.askContinueShopping()
-        } catch (e: IllegalArgumentException) {
-            outputView.printError(e.message ?: "[ERROR] 잘못된 입력입니다.")
-            askContinueShopping()
-        }
-    }
 
-    private fun askContinueOwnerMode(): Boolean {
+    private fun askContinueAdminMode(): Boolean {
         return try {
-            inputView.askContinueOwnerMode()
+            adminOutput.askContinueAdminMode()
+            inputView.readYesOrNo()
         } catch (e: IllegalArgumentException) {
             outputView.printError(e.message ?: "[ERROR] 잘못된 입력입니다.")
-            askContinueOwnerMode()
+            askContinueAdminMode()
         }
     }
 }

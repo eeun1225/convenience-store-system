@@ -3,6 +3,7 @@ package store.service
 import store.domain.product.Product
 import store.domain.product.ProductInventory
 import store.domain.purchase.PurchaseItem
+import store.view.CustomerOutput
 import store.view.InputView
 import store.view.NewProductInfo
 import store.view.NewPromotionInfo
@@ -10,7 +11,8 @@ import store.view.NewPromotionInfo
 class StoreService(
     private val productInventory: ProductInventory,
     private val promotionService: PromotionService,
-    private val inputView: InputView? = null
+    private val inputView: InputView? = null,
+    private val customerOutput: CustomerOutput? = null
 ) {
     fun processPurchase(
         purchaseRequests: List<Pair<String, Int>>,
@@ -46,8 +48,10 @@ class StoreService(
         regularProduct: Product?,
         currentDate: String
     ): PurchaseItem {
+
         val promotion = promotionService.getActivePromotion(promotionProduct.promotion!!, currentDate)
 
+        // 프로모션 없으면 일반 구매 처리
         if (promotion == null) {
             return processWithoutPromotion(name, requestQuantity, regularProduct ?: promotionProduct)
         }
@@ -55,30 +59,42 @@ class StoreService(
         var finalQuantity = requestQuantity
         val promotionStock = promotionProduct.quantity
 
-        if (promotion.canGetMoreFree(requestQuantity) && promotionStock >= requestQuantity + promotion.get) {
-            val shouldAdd = inputView?.askAddFreeItem(name) ?: false
+        if (promotion.canGetMoreFree(requestQuantity) &&
+            promotionStock >= requestQuantity + promotion.get
+        ) {
+            customerOutput?.askAddFreeItem(name)
+
+            val shouldAdd = inputView?.readYesOrNo() ?: false
             if (shouldAdd) {
                 finalQuantity += promotion.get
             }
         }
 
-        // 프로모션 적용 계산
+        // 프로모션 계산
         val promotionResult = promotionService.calculatePromotionBenefit(
             quantity = finalQuantity,
             promotion = promotion,
             promotionStock = promotionStock
         )
 
-        // 프로모션 재고 부족으로 정가 구매해야 하는 경우
+        // 프로모션 재고 부족 시 정가 구매 안내
         if (promotionResult.nonPromotionQuantity > 0) {
             val regularStock = regularProduct?.quantity ?: 0
+
             if (regularStock < promotionResult.nonPromotionQuantity) {
                 throw IllegalArgumentException("[ERROR] 재고 수량을 초과하여 구매할 수 없습니다. 다시 입력해 주세요.")
             }
 
-            val shouldBuy = inputView?.askBuyWithoutPromotion(name, promotionResult.nonPromotionQuantity) ?: true
+            customerOutput?.askBuyWithoutPromotion(
+                name,
+                promotionResult.nonPromotionQuantity
+            )
+
+            val shouldBuy = inputView?.readYesOrNo() ?: true
+
             if (!shouldBuy) {
                 finalQuantity = promotionResult.promotionQuantity
+
                 return PurchaseItem(
                     productName = name,
                     quantity = finalQuantity,
