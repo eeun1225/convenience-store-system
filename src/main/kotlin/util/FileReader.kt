@@ -87,9 +87,9 @@ object FileReader {
             val startDate = parts[3]
             val endDate = parts[4]
 
-            Validator.validateDate(startDate, "시작일")
-            Validator.validateDate(endDate, "종료일")
-            Validator.validatePromotionValues(buy, get)
+            InputValidator.validateDate(startDate, "시작일")
+            InputValidator.validateDate(endDate, "종료일")
+            InputValidator.validatePromotionValues(buy, get)
 
             return Promotion(name, buy, get, startDate, endDate)
         } catch (e: Exception) {
