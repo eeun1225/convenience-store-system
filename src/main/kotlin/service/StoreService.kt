@@ -14,145 +14,30 @@ class StoreService(
     private val inputView: InputView? = null,
     private val customerOutput: CustomerOutput? = null
 ) {
+    private val purchaseProcessor = PurchaseProcessor(
+        productInventory,
+        promotionService,
+        inputView,
+        customerOutput
+    )
+
+    private val inventoryManager = InventoryManager(productInventory)
+
+    // 구매 처리
     fun processPurchase(
         purchaseRequests: List<Pair<String, Int>>,
         currentDate: String
     ): List<PurchaseItem> {
         return purchaseRequests.map { (name, quantity) ->
-            processSingleProduct(name, quantity, currentDate)
+            purchaseProcessor.processSingleProduct(name, quantity, currentDate)
         }
-    }
-
-    private fun processSingleProduct(
-        name: String,
-        requestQuantity: Int,
-        currentDate: String
-    ): PurchaseItem {
-        val promotionProduct = productInventory.getPromotionProduct(name)
-        val regularProduct = productInventory.getRegularProduct(name)
-
-        validateProductExists(name, promotionProduct, regularProduct)
-        validateStock(name, requestQuantity)
-
-        return if (promotionProduct != null && promotionProduct.quantity > 0) {
-            processWithPromotion(name, requestQuantity, promotionProduct, regularProduct, currentDate)
-        } else {
-            processWithoutPromotion(name, requestQuantity, regularProduct!!)
-        }
-    }
-
-    private fun processWithPromotion(
-        name: String,
-        requestQuantity: Int,
-        promotionProduct: Product,
-        regularProduct: Product?,
-        currentDate: String
-    ): PurchaseItem {
-
-        val promotion = promotionService.getActivePromotion(promotionProduct.promotion!!, currentDate)
-
-        // 프로모션 없으면 일반 구매 처리
-        if (promotion == null) {
-            return processWithoutPromotion(name, requestQuantity, regularProduct ?: promotionProduct)
-        }
-
-        var finalQuantity = requestQuantity
-        val promotionStock = promotionProduct.quantity
-
-        if (promotion.canGetMoreFree(requestQuantity) &&
-            promotionStock >= requestQuantity + promotion.get
-        ) {
-            customerOutput?.askAddFreeItem(name)
-
-            val shouldAdd = inputView?.readYesOrNo() ?: false
-            if (shouldAdd) {
-                finalQuantity += promotion.get
-            }
-        }
-
-        // 프로모션 계산
-        val promotionResult = promotionService.calculatePromotionBenefit(
-            quantity = finalQuantity,
-            promotion = promotion,
-            promotionStock = promotionStock
-        )
-
-        // 프로모션 재고 부족 시 정가 구매 안내
-        if (promotionResult.nonPromotionQuantity > 0) {
-            val regularStock = regularProduct?.quantity ?: 0
-
-            if (regularStock < promotionResult.nonPromotionQuantity) {
-                throw IllegalArgumentException("[ERROR] 재고 수량을 초과하여 구매할 수 없습니다. 다시 입력해 주세요.")
-            }
-
-            customerOutput?.askBuyWithoutPromotion(
-                name,
-                promotionResult.nonPromotionQuantity
-            )
-
-            val shouldBuy = inputView?.readYesOrNo() ?: true
-
-            if (!shouldBuy) {
-                finalQuantity = promotionResult.promotionQuantity
-
-                return PurchaseItem(
-                    productName = name,
-                    quantity = finalQuantity,
-                    price = promotionProduct.price,
-                    promotionQuantity = promotionResult.promotionQuantity,
-                    freeQuantity = promotionResult.freeQuantity
-                )
-            }
-        }
-
-        return PurchaseItem(
-            productName = name,
-            quantity = finalQuantity,
-            price = promotionProduct.price,
-            promotionQuantity = promotionResult.promotionQuantity,
-            freeQuantity = promotionResult.freeQuantity
-        )
-    }
-
-    private fun processWithoutPromotion(
-        name: String,
-        requestQuantity: Int,
-        product: Product
-    ): PurchaseItem {
-        return PurchaseItem(
-            productName = name,
-            quantity = requestQuantity,
-            price = product.price,
-            promotionQuantity = 0,
-            freeQuantity = 0
-        )
     }
 
     fun updateInventory(items: List<PurchaseItem>) {
-        items.forEach { item ->
-            updateProductStock(item)
-        }
+        inventoryManager.updateInventory(items)
     }
 
-    private fun updateProductStock(item: PurchaseItem) {
-        val promotionProduct = productInventory.getPromotionProduct(item.productName)
-        val regularProduct = productInventory.getRegularProduct(item.productName)
-
-        var remainingQuantity = item.quantity + item.freeQuantity
-
-        if (promotionProduct != null && promotionProduct.quantity > 0) {
-            val deductFromPromotion = minOf(remainingQuantity, promotionProduct.quantity)
-            val updatedPromotionProduct = promotionProduct.decreaseQuantity(deductFromPromotion)
-            productInventory.updateProduct(item.productName, true, updatedPromotionProduct)
-            remainingQuantity -= deductFromPromotion
-        }
-
-        if (remainingQuantity > 0 && regularProduct != null) {
-            val updatedRegularProduct = regularProduct.decreaseQuantity(remainingQuantity)
-            productInventory.updateProduct(item.productName, false, updatedRegularProduct)
-        }
-    }
-
+    // 상품 조회
     fun getAllProducts(): List<Product> {
         return productInventory.getAllProducts()
     }
@@ -168,6 +53,13 @@ class StoreService(
         return promotionProduct ?: regularProduct!!
     }
 
+    fun getLowStockProducts(threshold: Int = 5): List<Product> {
+        return productInventory.getAllProducts()
+            .filter { it.quantity <= threshold }
+            .sortedBy { it.quantity }
+    }
+
+    // 상품 관리
     fun addNewProduct(productInfo: NewProductInfo) {
         val product = Product(
             name = productInfo.name,
@@ -188,30 +80,8 @@ class StoreService(
         productInventory.updateProduct(name, false, updatedProduct)
     }
 
+    // 프로모션 관리
     fun addCustomPromotion(promotionInfo: NewPromotionInfo) {
         promotionService.addPromotion(promotionInfo)
-    }
-
-    fun getLowStockProducts(threshold: Int = 5): List<Product> {
-        return productInventory.getAllProducts()
-            .filter { it.quantity <= threshold }
-            .sortedBy { it.quantity }
-    }
-
-    private fun validateProductExists(
-        name: String,
-        promotionProduct: Product?,
-        regularProduct: Product?
-    ) {
-        require(promotionProduct != null || regularProduct != null) {
-            "[ERROR] 존재하지 않는 상품입니다. 다시 입력해 주세요."
-        }
-    }
-
-    private fun validateStock(name: String, quantity: Int) {
-        val totalStock = productInventory.getTotalQuantity(name)
-        require(totalStock >= quantity) {
-            "[ERROR] 재고 수량을 초과하여 구매할 수 없습니다. 다시 입력해 주세요."
-        }
     }
 }
