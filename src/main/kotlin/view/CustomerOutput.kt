@@ -3,9 +3,19 @@ package store.view
 class CustomerOutput(private val out: CommonOutput) {
 
     fun showLoginMenu() {
-        out.printMessage("\n1. 회원 로그인")
-        out.printMessage("2. 비회원으로 계속")
+        out.printMessage("\n=== 구매자 로그인 ===")
+        out.printMessage("1. 회원가입")
+        out.printMessage("2. 로그인")
+        out.printMessage("3. 비회원으로 계속")
         out.printInline("선택: ")
+    }
+
+    fun showSignUpForm() {
+        out.printMessage("\n=== 회원가입 ===")
+    }
+
+    fun askName() {
+        out.printInline("이름을 입력해주세요: ")
     }
 
     fun askPhoneNumber() {
@@ -13,7 +23,27 @@ class CustomerOutput(private val out: CommonOutput) {
     }
 
     fun askPassword() {
-        out.printInline("비밀번호를 입력해주세요 (예: pw1234@!): ")
+        out.printInline("비밀번호를 입력해주세요 (8자 이상, 영문+숫자+특수문자): ")
+    }
+
+    fun askPasswordConfirm() {
+        out.printInline("비밀번호를 다시 입력해주세요: ")
+    }
+
+    fun showSignUpSuccess(name: String) {
+        out.printMessage("\n✓ 회원가입이 완료되었습니다. 환영합니다, ${name}님!")
+    }
+
+    fun showLoginForm() {
+        out.printMessage("\n=== 로그인 ===")
+    }
+
+    fun showLoginSuccess(name: String) {
+        out.printMessage("\n✓ 로그인 성공! 환영합니다, ${name}님!")
+    }
+
+    fun showLoginFailed() {
+        out.printMessage("\n✗ 로그인 실패. 휴대폰 번호 또는 비밀번호가 일치하지 않습니다.")
     }
 
     fun askContinueShopping() {

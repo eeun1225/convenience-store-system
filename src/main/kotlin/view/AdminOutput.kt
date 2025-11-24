@@ -9,6 +9,10 @@ class AdminOutput(private val out: CommonOutput) {
         out.printInline("관리자 번호를 입력해주세요: ")
     }
 
+    fun askPassword() {
+        out.printInline("비밀번호를 입력해주세요: ")
+    }
+
     fun showAdminMenu() {
         out.printMessage("\n=== 관리자 기능 ===")
         out.printMessage("1. 신규 상품 등록")
@@ -23,28 +27,11 @@ class AdminOutput(private val out: CommonOutput) {
         out.askYesOrNo("계속 관리하시겠습니까?")
     }
 
-    fun askNewProductName() {
-        out.printInline("상품명: ")
-    }
-
-    fun askNewProductPrice() {
-        out.printInline("가격: ")
-    }
-
-    fun askNewProductQuantity() {
-        out.printInline("수량: ")
-    }
-
-    fun askNewProductDescription() {
-        out.printInline("설명 (선택사항): ")
-    }
-
     fun showCategoryMenu(categories: List<ProductCategory>) {
         out.printMessage("\n카테고리를 선택하세요:")
         categories.forEachIndexed { idx, category ->
             out.printMessage("${idx + 1}. ${category.displayName}")
         }
-        out.printInline("선택: ")
     }
 
     fun askProductToUpdate() {
@@ -57,26 +44,6 @@ class AdminOutput(private val out: CommonOutput) {
 
     fun askUpdateQuantity() {
         out.printInline("새 수량: ")
-    }
-
-    fun askPromotionName() {
-        out.printInline("프로모션명: ")
-    }
-
-    fun askPromotionBuy() {
-        out.printInline("구매 수량 (buy): ")
-    }
-
-    fun askPromotionGet() {
-        out.printInline("증정 수량 (get): ")
-    }
-
-    fun askPromotionStartDate() {
-        out.printInline("시작일 (YYYY-MM-DD): ")
-    }
-
-    fun askPromotionEndDate() {
-        out.printInline("종료일 (YYYY-MM-DD): ")
     }
 
     fun printAdminInventory(products: List<Product>) {
